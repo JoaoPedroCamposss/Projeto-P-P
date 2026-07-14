@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestão de Rotas · Dashboard</title>
+<title>Projetos & Processos · Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <!--
   ===========================================================================
@@ -308,6 +309,31 @@
   }
   .import-note{font-size:12px;color:var(--text-muted);margin-top:14px;}
 
+  .import-log{
+    display:none;margin-top:16px;border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;background:#FAFBFC;font-size:12.5px;color:var(--text-secondary);
+  }
+  .import-log.visible{display:block;}
+  .import-log-title{
+    font-weight:700;color:var(--text);font-size:11.5px;text-transform:uppercase;
+    letter-spacing:.03em;margin-bottom:10px;
+  }
+  .import-log-meta{color:var(--text-muted);font-size:12px;margin-bottom:8px;line-height:1.6;}
+  .import-log-item{display:flex;align-items:center;gap:8px;padding:3px 0;}
+  .import-log-item .icon{width:14px;height:14px;flex-shrink:0;}
+  .import-log-item.ok{color:var(--st-ativa-fg);}
+  .import-log-item.bad{color:var(--st-cancelada-fg);}
+  .import-log-item.muted{color:var(--text-muted);}
+  .import-log-preview{margin-top:12px;border-top:1px dashed var(--border-strong);padding-top:10px;overflow-x:auto;}
+  .import-log-preview table{width:100%;border-collapse:collapse;font-size:11.5px;}
+  .import-log-preview th,.import-log-preview td{
+    padding:5px 9px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:left;
+  }
+  .import-log-preview th{color:var(--text-muted);font-weight:700;}
+  .import-log-preview td{color:var(--text-secondary);}
+  .import-log-errors{margin-top:12px;border-top:1px dashed var(--border-strong);padding-top:10px;}
+  .import-log-errors div{padding:2px 0;color:var(--st-cancelada-fg);font-size:12px;}
+
   /* ---------- Toasts ---------- */
   .toast-container{position:fixed;bottom:24px;right:24px;z-index:200;display:flex;flex-direction:column;gap:10px;}
   .toast{
@@ -405,8 +431,9 @@
     font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:6px;
     background:#F1F4F8;color:var(--text-secondary);
   }
-  .route-card-id{font-weight:700;font-size:14.5px;color:var(--text);letter-spacing:-0.01em;}
-  .route-card-sub{font-size:12px;color:var(--text-muted);margin-top:-8px;}
+  .route-card-title{display:flex;flex-direction:column;gap:3px;}
+  .route-card-id{font-weight:700;font-size:14.5px;color:var(--text);letter-spacing:-0.01em;overflow-wrap:anywhere;}
+  .route-card-sub{font-size:12px;color:var(--text-muted);overflow-wrap:anywhere;}
 
   .doc-status{display:flex;flex-direction:column;gap:5px;}
   .doc-status-label{
@@ -451,7 +478,7 @@
       <span class="brand-mark">
         <svg class="icon" viewBox="0 0 24 24"><path d="M4 19c3-1 5-4 5-7 0-2.5-1.5-4-3-4"/><path d="M20 5c-3 1-5 4-5 7 0 2.5 1.5 4 3 4"/><circle cx="6" cy="17" r="2"/><circle cx="18" cy="7" r="2"/></svg>
       </span>
-      RotaFácil
+      Projetos & Processos
     </div>
 
     <nav class="nav">
@@ -493,7 +520,7 @@
       <p>Acompanhe, edite e organize todas as rotas cadastradas no sistema.</p>
     </div>
     <div class="page-header-actions">
-      <button class="btn btn-secondary" data-perm="importar" onclick="openModal('modalImport')">
+      <button class="btn btn-secondary" data-perm="importar" onclick="openImportModal('rotas')">
         <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 8 12 3 17 8"/><path d="M5 21h14"/></svg>
         Importar planilha
       </button>
@@ -597,7 +624,7 @@
       </div>
     </div>
     <div class="page-header-actions">
-      <button class="btn btn-secondary" data-perm="importar" onclick="openModal('modalImport')">
+      <button class="btn btn-secondary" data-perm="importar" onclick="openImportModal('ciot')">
         <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="7 8 12 3 17 8"/><path d="M5 21h14"/></svg>
         Importar da planilha
       </button>
@@ -730,7 +757,7 @@
 <div class="modal-overlay" id="modalImport">
   <div class="modal">
     <div class="modal-header">
-      <h2>Importar planilha Excel</h2>
+      <h2 id="importModalTitle">Importar planilha Excel</h2>
       <button class="icon-btn" onclick="closeModal('modalImport')">
         <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -743,7 +770,12 @@
         <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(event)">
         <div id="fileChipWrap"></div>
       </div>
-      <p class="import-note">A planilha deve conter as colunas: Nome, Código, Categoria, Status, Data, Responsável. O processamento e a validação completa dos dados serão feitos pelo backend após o upload.</p>
+      <div class="form-group" id="importSheetWrap" style="display:none;margin-top:14px;">
+        <label>Aba da planilha a importar</label>
+        <select id="importSheetSelect" onchange="renderImportAnalysisForSheet(this.value)"></select>
+      </div>
+      <p class="import-note" id="importModalNote">A planilha deve conter as colunas: Nome, Código, Categoria, Status, Data, Responsável. As linhas são lidas e validadas aqui mesmo no navegador; ao integrar com o backend, o mesmo arquivo também será enviado para validação definitiva no servidor.</p>
+      <div class="import-log" id="importLog"></div>
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-secondary" onclick="closeModal('modalImport')">Cancelar</button>
@@ -804,7 +836,7 @@
 
 <!-- ================= MODAL: DETALHES CIOT & PEDÁGIO ================= -->
 <div class="modal-overlay" id="modalCiotDetails">
-  <div class="modal">
+  <div class="modal modal-lg">
     <div class="modal-header">
       <h2>Detalhes da rota</h2>
       <button class="icon-btn" onclick="closeModal('modalCiotDetails')">
@@ -849,6 +881,8 @@ let state = {
   role: 'Administrador', // Administrador | Operador | Visualizador
   editingId: null,
   selectedFile: null,
+  importTarget: 'rotas', // 'rotas' | 'ciot' — qual painel a importação vai alimentar
+  importWorkbook: null,  // workbook do SheetJS já lido, para trocar de aba sem reler o arquivo
 };
 
 const PERMISSIONS = {
@@ -916,7 +950,7 @@ function init(){
   ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault(); dz.classList.remove('dragover');}));
   dz.addEventListener('drop', e=>{
     const file = e.dataTransfer.files[0];
-    if(file){ state.selectedFile = file; renderFileChip(); }
+    if(file){ state.selectedFile = file; renderFileChip(); analyzeSelectedFile(file); }
   });
 }
 
@@ -989,6 +1023,10 @@ function clearFilters(){
 function formatDate(iso){
   const [y,m,d] = iso.split('-');
   return `${d}/${m}/${y}`;
+}
+
+function formatBRL(value){
+  return value.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
 }
 
 function renderTable(routes){
@@ -1164,9 +1202,33 @@ function openDetails(id){
 /* ===========================================================================
    IMPORTAR EXCEL
    =========================================================================== */
+function openImportModal(target){
+  state.importTarget = target;
+  state.selectedFile = null;
+  state.importWorkbook = null;
+  document.getElementById('fileInput').value = '';
+  renderFileChip();
+
+  const logEl = document.getElementById('importLog');
+  logEl.classList.remove('visible');
+  logEl.innerHTML = '';
+  document.getElementById('importSheetWrap').style.display = 'none';
+  document.getElementById('importSheetSelect').innerHTML = '';
+
+  const isCiot = target === 'ciot';
+  document.getElementById('importModalTitle').textContent = isCiot
+    ? 'Importar planilha — CIOT & Vale Pedágio'
+    : 'Importar planilha Excel';
+  document.getElementById('importModalNote').textContent = isCiot
+    ? 'Reconheço variações de nomes de coluna usadas nas planilhas de emissão (ex: "LT da rota", "Assignment Task ID", "Placa do Veículo"). Só a identificação da rota é obrigatória — os demais campos ficam em branco quando não encontrados. A planilha pode ter várias abas: escolha qual importar depois de selecionar o arquivo.'
+    : 'A planilha deve conter as colunas: Nome, Código, Categoria, Status, Data, Responsável. As linhas são lidas e validadas aqui mesmo no navegador; ao integrar com o backend, o mesmo arquivo também será enviado para validação definitiva no servidor.';
+
+  openModal('modalImport');
+}
+
 function handleFileSelect(e){
   const file = e.target.files[0];
-  if(file){ state.selectedFile = file; renderFileChip(); }
+  if(file){ state.selectedFile = file; renderFileChip(); analyzeSelectedFile(file); }
 }
 
 function renderFileChip(){
@@ -1178,16 +1240,492 @@ function renderFileChip(){
   </div>`;
 }
 
-function submitImport(){
-  if(!state.selectedFile){ showToast('Selecione um arquivo antes de importar.'); return; }
-  // TODO: enviar via multipart/form-data para POST /api/rotas/importar
-  // const formData = new FormData(); formData.append('planilha', state.selectedFile);
-  // fetch('/api/rotas/importar', {method:'POST', body: formData})
-  showToast(`Arquivo "${state.selectedFile.name}" enviado para processamento.`);
-  state.selectedFile = null;
-  document.getElementById('fileInput').value = '';
-  renderFileChip();
-  closeModal('modalImport');
+function normalizeStr(s){
+  return String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+}
+
+const IMPORT_COLUMNS = {
+  nome: ['nome'],
+  codigo: ['codigo'],
+  categoria: ['categoria'],
+  status: ['status'],
+  data: ['data'],
+  responsavel: ['responsavel'],
+};
+const IMPORT_COLUMN_LABELS = {
+  nome: 'Nome', codigo: 'Código', categoria: 'Categoria',
+  status: 'Status', data: 'Data', responsavel: 'Responsável',
+};
+
+/* Apelidos de coluna vistos nas planilhas reais de emissão (CIOT & Vale Pedágio).
+   Os nomes mudam de aba para aba ao longo do tempo — só "routeId" é obrigatório,
+   o resto entra em branco quando a coluna não existir naquela aba. */
+const CIOT_IMPORT_ALIASES = {
+  routeId: ['id da rota', 'lt da rota', 'assignment task id', 'id da rota / nome do arquivo'],
+  driver: ['driver name', 'driver name cpf'],
+  base: ['base'],
+  placa: ['placa', 'veiculo placa', 'placa do veiculo'],
+  tipoVeiculo: ['tipo veiculo'],
+  qtd: ['qtd pacotes', 'qtd ct-es', 'qtd ctes'],
+  valor: ['valor emissao'],
+  statusInterno: ['status interno'],
+  statusEmiteAi: ['status emite ai'],
+  ciot: ['ciot'],
+  vpo: ['vpo'],
+  emissor: ['emissor'],
+  dataEmissao: ['data da emissao'],
+};
+const CIOT_IMPORT_LABELS = {
+  routeId: 'ID da rota / Task ID', driver: 'Motorista', base: 'Base', placa: 'Placa',
+  tipoVeiculo: 'Tipo de veículo', qtd: 'Qtd. pacotes/CT-es', valor: 'Valor da emissão',
+  statusInterno: 'Status interno', statusEmiteAi: 'Status Emite aí', ciot: 'CIOT',
+  vpo: 'Vale Pedágio (VPO)', emissor: 'Emissor', dataEmissao: 'Data da emissão',
+};
+
+/* Lê o arquivo (CSV como texto UTF-8, XLSX/XLS como binário) e devolve o
+   workbook do SheetJS inteiro — guardado em state.importWorkbook para que
+   trocar de aba não precise reler o arquivo do disco. */
+function readWorkbook(file){
+  const isCsv = /\.csv$/i.test(file.name);
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = ()=>reject(new Error('Não foi possível ler o arquivo.'));
+    reader.onload = (e)=>{
+      try{
+        // CSV lido como texto: se lido como bytes binários, o SheetJS decodifica
+        // como Latin-1 e corrompe acentos (ex: "Código" -> "CÃ³digo").
+        const workbook = isCsv
+          ? XLSX.read(e.target.result, {type:'string'})
+          : XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+        resolve(workbook);
+      }catch(err){ reject(err); }
+    };
+    if(isCsv) reader.readAsText(file, 'UTF-8');
+    else reader.readAsArrayBuffer(file);
+  });
+}
+
+function getSheetRows(workbook, sheetName){
+  const sheet = workbook.Sheets[sheetName];
+  return XLSX.utils.sheet_to_json(sheet, {header:1, raw:false, defval:''});
+}
+
+/* Abas ocultas/muito ocultas no Excel continuam aparecendo no seletor (o SheetJS
+   lê todas), mas o usuário não as vê ao abrir o arquivo normalmente — sinalizar
+   isso no rótulo evita que ele escolha por engano uma aba arquivada/errada. */
+function getSheetHiddenLabel(workbook, index){
+  const info = workbook.Workbook && workbook.Workbook.Sheets && workbook.Workbook.Sheets[index];
+  if(!info) return '';
+  if(info.Hidden === 1) return ' (oculta no Excel)';
+  if(info.Hidden === 2) return ' (muito oculta no Excel)';
+  return '';
+}
+
+/* dataRowCount (rows.length-1) conta linhas "existentes" na área usada da planilha,
+   mas o Excel às vezes deixa esse intervalo inflado mesmo sem nenhuma linha
+   realmente preenchida (aba órfã/duplicada). Contar linhas não-vazias de fato
+   é o que importa para avisar o usuário que não há nada para importar ali. */
+function countNonBlankDataRows(rows){
+  return rows.slice(1).filter(row=> row && !row.every(c=>c===undefined || c===null || String(c).trim()==='')).length;
+}
+
+function importLogIcon(ok){
+  return ok
+    ? '<polyline points="20 6 9 17 4 12"/>'
+    : '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
+}
+
+function renderImportPreview(headerRow, sampleRows){
+  if(!sampleRows.length) return '';
+  return `<div class="import-log-preview"><table>
+    <thead><tr>${headerRow.map(h=>`<th>${h || '(vazio)'}</th>`).join('')}</tr></thead>
+    <tbody>${sampleRows.map(r=>`<tr>${headerRow.map((_,i)=>`<td>${r[i] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+/* Lê o workbook assim que o arquivo é selecionado, popula o seletor de aba
+   (se houver mais de uma) e mostra a análise da primeira aba. */
+async function analyzeSelectedFile(file){
+  const logEl = document.getElementById('importLog');
+  logEl.classList.add('visible');
+  logEl.innerHTML = `<div class="import-log-title">Analisando arquivo…</div>`;
+  document.getElementById('importSheetWrap').style.display = 'none';
+
+  try{
+    const workbook = await readWorkbook(file);
+    state.importWorkbook = workbook;
+
+    const sheetNames = workbook.SheetNames;
+    const sheetSelect = document.getElementById('importSheetSelect');
+    sheetSelect.innerHTML = sheetNames.map((n,i)=>`<option value="${n}">${n}${getSheetHiddenLabel(workbook,i)}</option>`).join('');
+    sheetSelect.value = sheetNames[0];
+    document.getElementById('importSheetWrap').style.display = sheetNames.length > 1 ? 'flex' : 'none';
+
+    renderImportAnalysisForSheet(sheetNames[0]);
+  }catch(err){
+    console.error('[Importar planilha] erro ao analisar arquivo:', err);
+    logEl.innerHTML = `
+      <div class="import-log-title">Arquivo analisado</div>
+      <div class="import-log-item bad">
+        <svg class="icon" viewBox="0 0 24 24">${importLogIcon(false)}</svg>
+        Não foi possível ler este arquivo (${err.message || 'formato inválido'}).
+      </div>
+    `;
+  }
+}
+
+/* Mostra no modal (e no console, com mais detalhe) qual arquivo é, qual aba
+   está selecionada, quais colunas ela tem e quais das colunas esperadas
+   pelo painel de destino foram encontradas — para facilitar adequar
+   planilhas reais do projeto ao formato esperado. */
+function renderImportAnalysisForSheet(sheetName){
+  const file = state.selectedFile;
+  const workbook = state.importWorkbook;
+  if(!file || !workbook) return;
+
+  const rows = getSheetRows(workbook, sheetName);
+  const headerRow = rows[0] || [];
+  const dataRowCount = Math.max(rows.length - 1, 0);
+  const nonBlankRowCount = countNonBlankDataRows(rows);
+  const isCiot = state.importTarget === 'ciot';
+
+  let colStatus;
+  if(isCiot){
+    const colIndex = resolveCiotColumns(headerRow);
+    colStatus = Object.keys(CIOT_IMPORT_ALIASES).map(key=>({
+      key, label: CIOT_IMPORT_LABELS[key], found: colIndex[key] !== -1, required: key === 'routeId',
+    }));
+  } else {
+    const normalizedHeaders = headerRow.map(normalizeStr);
+    colStatus = Object.keys(IMPORT_COLUMNS).map(key=>({
+      key, label: IMPORT_COLUMN_LABELS[key],
+      found: normalizedHeaders.some(h=>IMPORT_COLUMNS[key].includes(h)), required: true,
+    }));
+  }
+
+  console.group(`[Importar planilha] arquivo selecionado: ${file.name} — aba "${sheetName}"`);
+  console.log('Tipo:', file.type || '(não informado)', '| Tamanho:', file.size, 'bytes');
+  console.log('Abas encontradas na planilha:', workbook.SheetNames);
+  console.log('Aba analisada:', sheetName);
+  console.log('Cabeçalho bruto encontrado:', headerRow);
+  console.log('Colunas esperadas x encontradas:', colStatus);
+  console.log('Total de linhas de dados:', dataRowCount);
+  console.log('Prévia das primeiras linhas:', rows.slice(1, 6));
+  console.groupEnd();
+
+  const logEl = document.getElementById('importLog');
+  logEl.classList.add('visible');
+  logEl.innerHTML = `
+    <div class="import-log-title">Arquivo analisado</div>
+    <div class="import-log-meta">
+      <strong>${file.name}</strong> · ${(file.size/1024).toFixed(1)} KB
+      · aba "${sheetName}"${workbook.SheetNames.length > 1 ? ` (1 de ${workbook.SheetNames.length})` : ''}
+      · ${dataRowCount} linha${dataRowCount===1?'':'s'} de dados
+    </div>
+    ${nonBlankRowCount === 0 ? `
+      <div class="import-log-item bad">
+        <svg class="icon" viewBox="0 0 24 24">${importLogIcon(false)}</svg>
+        Esta aba está vazia — nenhuma linha de dados preenchida foi encontrada. Verifique se selecionou a aba correta (o seletor acima também lista abas ocultas no Excel).
+      </div>
+    ` : ''}
+    ${colStatus.map(c=>`
+      <div class="import-log-item ${c.found ? 'ok' : (c.required ? 'bad' : 'muted')}">
+        <svg class="icon" viewBox="0 0 24 24">${importLogIcon(c.found)}</svg>
+        ${c.label}${c.found ? '' : (c.required ? ' — coluna obrigatória não encontrada' : ' — não encontrada (opcional)')}
+      </div>
+    `).join('')}
+    ${renderImportPreview(headerRow, rows.slice(1, 6))}
+  `;
+}
+
+function parseImportDate(value){
+  if(value === null || value === undefined || value === '') return null;
+  if(value instanceof Date && !isNaN(value)) return value.toISOString().slice(0,10);
+  const str = String(value).trim();
+  let m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  const parsed = new Date(str);
+  if(!isNaN(parsed)) return parsed.toISOString().slice(0,10);
+  return null;
+}
+
+function parseImportedRows(rows){
+  if(!rows || rows.length === 0) return {routes:[], errors:['Planilha vazia.']};
+
+  const headerRow = rows[0].map(normalizeStr);
+  const colIndex = {};
+  Object.keys(IMPORT_COLUMNS).forEach(key=>{
+    colIndex[key] = headerRow.findIndex(h=>IMPORT_COLUMNS[key].includes(h));
+  });
+  const missing = Object.keys(colIndex).filter(k=>colIndex[k] === -1);
+  if(missing.length){
+    return {routes:[], errors:[`Colunas não encontradas na planilha: ${missing.join(', ')}.`]};
+  }
+
+  const routes = [];
+  const errors = [];
+  let nextId = MOCK_ROUTES.length ? Math.max(...MOCK_ROUTES.map(r=>r.id)) + 1 : 1;
+
+  rows.slice(1).forEach((row, i)=>{
+    if(!row || row.every(c=>c===undefined || c===null || String(c).trim()==='')) return;
+    const rowNum = i + 2;
+
+    const nome = String(row[colIndex.nome] ?? '').trim();
+    const codigo = String(row[colIndex.codigo] ?? '').trim();
+    const categoriaRaw = String(row[colIndex.categoria] ?? '').trim();
+    const statusRaw = String(row[colIndex.status] ?? '').trim();
+    const dataIso = parseImportDate(row[colIndex.data]);
+    const responsavel = String(row[colIndex.responsavel] ?? '').trim();
+
+    if(!nome || !codigo || !responsavel || !dataIso){
+      errors.push(`Linha ${rowNum}: dados obrigatórios ausentes ou data inválida.`);
+      return;
+    }
+    const categoria = CATEGORIES.find(c=>normalizeStr(c)===normalizeStr(categoriaRaw));
+    if(!categoria){
+      errors.push(`Linha ${rowNum}: categoria "${categoriaRaw}" não reconhecida.`);
+      return;
+    }
+    const status = STATUSES.find(s=>normalizeStr(s)===normalizeStr(statusRaw));
+    if(!status){
+      errors.push(`Linha ${rowNum}: status "${statusRaw}" não reconhecido.`);
+      return;
+    }
+    if(MOCK_ROUTES.some(r=>r.codigo === codigo) || routes.some(r=>r.codigo === codigo)){
+      errors.push(`Linha ${rowNum}: código "${codigo}" já existe.`);
+      return;
+    }
+
+    routes.push({
+      id: nextId++, codigo, nome, categoria, status, data: dataIso, responsavel,
+      origem:'', destino:'', distancia:0, obs:'',
+    });
+  });
+
+  return {routes, errors};
+}
+
+/* ---- Import CIOT & Vale Pedágio: helpers de tolerância a planilha real ---- */
+function resolveCiotColumns(headerRow){
+  const normalized = headerRow.map(normalizeStr);
+  const colIndex = {};
+  Object.keys(CIOT_IMPORT_ALIASES).forEach(key=>{
+    colIndex[key] = normalized.findIndex(h=>CIOT_IMPORT_ALIASES[key].includes(h));
+  });
+  colIndex.observacaoIdxs = normalized
+    .map((h, i)=> h.startsWith('observacao') ? i : -1)
+    .filter(i=>i !== -1);
+  return colIndex;
+}
+
+/* Converte valores em R$ tolerando os dois formatos vistos na planilha real:
+   "R$ 147.00" (ponto decimal) e "R$ 6.522,00" / "R$10.934,50" (vírgula decimal,
+   ponto como separador de milhar). */
+function parseCurrencyBRL(raw){
+  if(raw === null || raw === undefined || raw === '') return null;
+  let s = String(raw).replace(/[^\d.,-]/g, '').trim();
+  if(!s) return null;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if(lastComma > lastDot){
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if(lastDot > lastComma){
+    s = s.replace(/,/g, '');
+  }
+  const num = parseFloat(s);
+  return isNaN(num) ? null : num;
+}
+
+/* O tipo de operação (First mile / Line haul / Last mile) não vem em coluna
+   nenhuma nessa planilha — está embutido no nome da aba (sufixo FM/LH/LM XPT). */
+function deriveTipoFromSheetName(sheetName){
+  const n = normalizeStr(sheetName);
+  if(n.includes('lm xpt') || n.includes('lmxpt')) return 'Last mile';
+  if(n.includes('lh')) return 'Line haul';
+  if(n.includes('fm')) return 'First mile';
+  return CIOT_TYPES[0];
+}
+
+/* A "Data da emissão" da linha costuma vir vazia; o nome da aba embute o
+   período (ex: "070526 ao 150526 LH" = 07/05/26 a 15/05/26), usado como
+   estimativa de data quando a linha não tem uma própria. */
+function parseSheetDateToken(sheetName){
+  const m = sheetName.match(/(\d{2})(\d{2})(\d{2})/);
+  if(!m) return null;
+  const [, dd, mm, yy] = m;
+  return `20${yy}-${mm}-${dd}`;
+}
+
+/* Normaliza os muitos valores de status vistos na planilha ("EMITIDO",
+   "SEM CIOT", "SEM PEDÁGIO", "Cancelado", "CARGA_FINALIZADA", "XPT",
+   "NF-E", "ERRO DE XML" etc.) para os três status do painel. */
+function normalizeDocStatus(raw){
+  const n = normalizeStr(raw);
+  if(!n) return '';
+  if(n.includes('emitido') || n.includes('carga finalizada') || n.includes('carga_finalizada')) return 'Emitido';
+  if(n.includes('cancel')) return 'Cancelado';
+  return 'Pendente';
+}
+
+function parseImportedCiotRows(rows, sheetName){
+  if(!rows || rows.length === 0) return {routes:[], errors:['Aba vazia.'], warnings:[]};
+
+  const headerRow = rows[0] || [];
+  const colIndex = resolveCiotColumns(headerRow);
+  if(colIndex.routeId === -1){
+    return {
+      routes: [],
+      errors: ['Não encontrei nenhuma coluna de identificação da rota (ex: "ID da rota", "LT da rota", "Assignment Task ID").'],
+      warnings: [],
+    };
+  }
+
+  const inferredTipo = deriveTipoFromSheetName(sheetName);
+  const inferredDate = parseSheetDateToken(sheetName);
+  const get = (row, idx)=> idx === -1 ? '' : String(row[idx] ?? '').trim();
+
+  const routes = [];
+  const errors = [];
+  const warnings = [];
+  let blankDateCount = 0;
+
+  rows.slice(1).forEach((row, i)=>{
+    if(!row || row.every(c=>c===undefined || c===null || String(c).trim()==='')) return;
+    const rowNum = i + 2;
+
+    const routeId = get(row, colIndex.routeId);
+    if(!routeId){
+      errors.push(`Linha ${rowNum}: sem identificador de rota, linha ignorada.`);
+      return;
+    }
+
+    const dataEmissaoRaw = get(row, colIndex.dataEmissao);
+    const dataEmissaoIso = parseImportDate(dataEmissaoRaw);
+    if(!dataEmissaoIso) blankDateCount++;
+
+    const qtdRaw = get(row, colIndex.qtd);
+    const qtdPacotes = qtdRaw ? Number(qtdRaw.replace(',', '.')) : null;
+
+    routes.push({
+      id: routeId,
+      tipo: inferredTipo,
+      data: dataEmissaoIso || inferredDate || new Date().toISOString().slice(0,10),
+      placa: get(row, colIndex.placa),
+      motorista: get(row, colIndex.driver),
+      base: get(row, colIndex.base),
+      tipoVeiculo: get(row, colIndex.tipoVeiculo),
+      qtdPacotes: (qtdPacotes !== null && !isNaN(qtdPacotes)) ? qtdPacotes : null,
+      valor: parseCurrencyBRL(get(row, colIndex.valor)),
+      statusInterno: get(row, colIndex.statusInterno),
+      statusEmiteAi: get(row, colIndex.statusEmiteAi),
+      ciot: normalizeDocStatus(get(row, colIndex.ciot)) || 'Pendente',
+      pedagio: normalizeDocStatus(get(row, colIndex.vpo)) || 'Pendente',
+      emissor: get(row, colIndex.emissor),
+      observacao: colIndex.observacaoIdxs.map(idx=>get(row, idx)).filter(Boolean).join(' | '),
+    });
+  });
+
+  if(blankDateCount){
+    warnings.push(`${blankDateCount} linha(s) sem "Data da emissão": usada a data estimada a partir do nome da aba (${inferredDate || 'data de hoje'}).`);
+  }
+  if(colIndex.ciot === -1 && colIndex.vpo === -1){
+    warnings.push('Esta aba não tem colunas separadas de CIOT/VPO; os status desses campos entraram como "Pendente" (o Status Interno/Status Emite aí original de cada linha fica disponível nos detalhes da rota).');
+  }
+  warnings.push(`Tipo de operação definido como "${inferredTipo}" a partir do nome da aba "${sheetName}" (a planilha não tem uma coluna própria para isso).`);
+
+  return {routes, errors, warnings};
+}
+
+async function submitImport(){
+  if(!state.selectedFile || !state.importWorkbook){ showToast('Selecione um arquivo antes de importar.'); return; }
+  const file = state.selectedFile;
+  const workbook = state.importWorkbook;
+  const sheetSelect = document.getElementById('importSheetSelect');
+  const sheetName = sheetSelect.value || workbook.SheetNames[0];
+  const logEl = document.getElementById('importLog');
+
+  try{
+    const rows = getSheetRows(workbook, sheetName);
+
+    // TODO: ao integrar com o backend, enviar o arquivo original (+ aba escolhida) via
+    // multipart/form-data para o endpoint de importação e deixar o servidor fazer a
+    // validação/persistência definitiva. O parse abaixo só reflete o resultado na UI.
+
+    if(state.importTarget === 'ciot'){
+      const {routes, errors, warnings} = parseImportedCiotRows(rows, sheetName);
+
+      console.group(`[Importar planilha] resultado — CIOT & Vale Pedágio — ${file.name} (aba "${sheetName}")`);
+      console.log('Rotas importadas:', routes.length, routes);
+      if(warnings.length) console.info('Observações:', warnings);
+      if(errors.length) console.warn('Linhas ignoradas:', errors);
+      console.groupEnd();
+
+      if(routes.length){
+        CIOT_ROUTES.unshift(...routes);
+        renderCiotTabs();
+        applyCiotFilters();
+      }
+
+      logEl.classList.add('visible');
+      logEl.insertAdjacentHTML('beforeend', `
+        <div class="import-log-title" style="margin-top:14px;">Resultado da importação</div>
+        <div class="import-log-item ${routes.length ? 'ok' : 'bad'}">
+          <svg class="icon" viewBox="0 0 24 24">${importLogIcon(!!routes.length)}</svg>
+          ${routes.length} rota${routes.length===1?'':'s'} importada${routes.length===1?'':'s'} da aba "${sheetName}"
+        </div>
+        ${warnings.length ? `<div class="import-log-errors">${warnings.map(w=>`<div style="color:var(--text-muted);">ℹ ${w}</div>`).join('')}</div>` : ''}
+        ${errors.length ? `<div class="import-log-errors">${errors.slice(0,20).map(msg=>`<div>⚠ ${msg}</div>`).join('')}${errors.length>20?`<div>… e mais ${errors.length-20} linha(s) ignorada(s).</div>`:''}</div>` : ''}
+      `);
+
+      if(routes.length && !errors.length){
+        showToast(`${routes.length} rota${routes.length===1?'':'s'} importada${routes.length===1?'':'s'} com sucesso.`);
+      } else if(routes.length && errors.length){
+        showToast(`${routes.length} importada(s), ${errors.length} linha(s) ignorada(s) — veja o log abaixo.`);
+      } else {
+        showToast(errors[0] || 'Nenhuma linha válida encontrada na aba selecionada.');
+      }
+    } else {
+      const {routes, errors} = parseImportedRows(rows);
+
+      console.group(`[Importar planilha] resultado — Gestão de Rotas — ${file.name} (aba "${sheetName}")`);
+      console.log('Rotas importadas:', routes.length, routes);
+      if(errors.length) console.warn('Linhas com erro:', errors);
+      console.groupEnd();
+
+      if(routes.length){
+        MOCK_ROUTES.push(...routes);
+        renderStats();
+        applyFilters();
+      }
+
+      logEl.classList.add('visible');
+      logEl.insertAdjacentHTML('beforeend', `
+        <div class="import-log-title" style="margin-top:14px;">Resultado da importação</div>
+        <div class="import-log-item ${routes.length ? 'ok' : 'bad'}">
+          <svg class="icon" viewBox="0 0 24 24">${importLogIcon(!!routes.length)}</svg>
+          ${routes.length} rota${routes.length===1?'':'s'} importada${routes.length===1?'':'s'}
+        </div>
+        ${errors.length ? `<div class="import-log-errors">${errors.slice(0,20).map(msg=>`<div>⚠ ${msg}</div>`).join('')}${errors.length>20?`<div>… e mais ${errors.length-20} linha(s).</div>`:''}</div>` : ''}
+      `);
+
+      if(routes.length && !errors.length){
+        showToast(`${routes.length} rota${routes.length===1?'':'s'} importada${routes.length===1?'':'s'} com sucesso.`);
+      } else if(routes.length && errors.length){
+        showToast(`${routes.length} importada(s), ${errors.length} linha(s) com erro — veja o log abaixo.`);
+      } else {
+        showToast(errors[0] || 'Nenhuma linha válida encontrada na planilha.');
+      }
+    }
+  }catch(err){
+    console.error('[Importar planilha] erro ao importar:', err);
+    showToast('Não foi possível processar o arquivo. Verifique se o formato é .xlsx, .xls ou .csv.');
+  }finally{
+    state.selectedFile = null;
+    document.getElementById('fileInput').value = '';
+    renderFileChip();
+  }
 }
 
 /* ===========================================================================
@@ -1352,9 +1890,10 @@ function renderCiotGroups(routes){
               <span class="tag-pill">${r.tipo}</span>
               <span class="date-pill">${formatDate(r.data)}</span>
             </div>
-            <div>
+            <div class="route-card-title">
               <div class="route-card-id">${r.id}</div>
-              <div class="route-card-sub">Placa ${r.placa}</div>
+              <div class="route-card-sub">Placa ${r.placa || '—'}${r.motorista ? ' · ' + r.motorista : ''}</div>
+              ${(r.qtdPacotes != null || r.valor != null) ? `<div class="route-card-sub">${r.qtdPacotes != null ? r.qtdPacotes + ' pacote' + (r.qtdPacotes===1?'':'s') : ''}${(r.qtdPacotes!=null && r.valor!=null) ? ' · ' : ''}${r.valor!=null ? formatBRL(r.valor) : ''}</div>` : ''}
             </div>
 
             <div class="doc-status">
@@ -1430,11 +1969,22 @@ function openCiotDetails(id){
       <div class="details-item"><span class="details-label">ID da rota</span><span class="details-value">${r.id}</span></div>
       <div class="details-item"><span class="details-label">Tipo</span><span class="details-value">${r.tipo}</span></div>
       <div class="details-item"><span class="details-label">Data</span><span class="details-value">${formatDate(r.data)}</span></div>
-      <div class="details-item"><span class="details-label">Placa</span><span class="details-value">${r.placa}</span></div>
-      <div class="details-item"><span class="details-label">Motorista</span><span class="details-value">${r.motorista}</span></div>
+      <div class="details-item"><span class="details-label">Placa</span><span class="details-value">${r.placa || '—'}</span></div>
+      <div class="details-item"><span class="details-label">Motorista</span><span class="details-value">${r.motorista || '—'}</span></div>
+      <div class="details-item"><span class="details-label">Base</span><span class="details-value">${r.base || '—'}</span></div>
+      <div class="details-item"><span class="details-label">Tipo de veículo</span><span class="details-value">${r.tipoVeiculo || '—'}</span></div>
+      <div class="details-item"><span class="details-label">Qtd. pacotes/CT-es</span><span class="details-value">${r.qtdPacotes != null ? r.qtdPacotes : '—'}</span></div>
+      <div class="details-item"><span class="details-label">Valor da emissão</span><span class="details-value">${r.valor != null ? formatBRL(r.valor) : '—'}</span></div>
+      <div class="details-item"><span class="details-label">Emissor</span><span class="details-value">${r.emissor || '—'}</span></div>
       <div class="details-item"><span class="details-label">Status CIOT</span><span class="status-badge" data-status="${r.ciot==='Emitido'?'Ativa':(r.ciot==='Cancelado'?'Cancelada':'Pendente')}"><span class="dot"></span>${r.ciot}</span></div>
       <div class="details-item"><span class="details-label">Status Vale Pedágio</span><span class="status-badge" data-status="${r.pedagio==='Emitido'?'Ativa':(r.pedagio==='Cancelado'?'Cancelada':'Pendente')}"><span class="dot"></span>${r.pedagio}</span></div>
+      ${r.statusInterno ? `<div class="details-item"><span class="details-label">Status interno (origem)</span><span class="details-value">${r.statusInterno}</span></div>` : ''}
+      ${r.statusEmiteAi ? `<div class="details-item"><span class="details-label">Status Emite aí (origem)</span><span class="details-value">${r.statusEmiteAi}</span></div>` : ''}
     </div>
+    ${r.observacao ? `
+      <div class="details-label" style="margin-bottom:8px;">Observação</div>
+      <div class="details-notes">${r.observacao}</div>
+    ` : ''}
   `;
   openModal('modalCiotDetails');
 }
